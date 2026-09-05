@@ -1,5 +1,32 @@
-import { Composition } from "remotion";
+import { CalculateMetadataFunction, Composition } from "remotion";
 import { MyComponent } from "./Composition";
+
+type ClipType = {
+  src: string;
+  start: number;
+  length: number;
+};
+
+type Props = {
+  clips: ClipType[];
+  audioUrl: string;
+};
+
+const calculateMetadata: CalculateMetadataFunction<Props> = ({ props }) => {
+  const fps = 30;
+
+  const totalDuration = props.clips.reduce(
+    (max, clip) => Math.max(max, clip.start + clip.length),
+    0
+  );
+
+  return {
+    durationInFrames: Math.max(1, Math.round(totalDuration * fps)),
+    fps,
+    width: 1280,
+    height: 720,
+  };
+};
 
 export const RemotionRoot = () => {
   return (
@@ -11,6 +38,7 @@ export const RemotionRoot = () => {
         fps={30}
         width={1280}
         height={720}
+        calculateMetadata={calculateMetadata}
         defaultProps={{
           clips: [
             {
