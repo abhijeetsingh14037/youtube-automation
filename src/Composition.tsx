@@ -1,4 +1,4 @@
-import { Sequence, OffthreadVideo, Audio, AbsoluteFill } from "remotion";
+import { Sequence, OffthreadVideo, Audio, AbsoluteFill, staticFile } from "remotion";
 
 type ClipType = {
   src: string;
@@ -26,7 +26,9 @@ export const MyComponent: React.FC<Props> = ({ clips, audioUrl }) => {
           </Sequence>
         );
       })}
-      {audioUrl ? <Audio src={audioUrl} /> : null}
+      {audioUrl ? (
+        <Audio src={audioUrl.startsWith("http") ? audioUrl : staticFile(audioUrl)} />
+      ) : null}
     </AbsoluteFill>
   );
 };

@@ -16,8 +16,24 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install dependencies
         run: npm install
+
+      - name: Install edge-tts
+        run: pip install edge-tts
+
+      - name: Write story text to file
+        env:
+          STORY_TEXT: ${{ github.event.client_payload.story_text }}
+        run: node -e "require('fs').writeFileSync('story.txt', process.env.STORY_TEXT)"
+
+      - name: Generate audio with edge-tts
+        run: edge-tts --voice hi-IN-MadhurNeural --file story.txt --write-media public/audio.mp3
 
       - name: Write props to file
         run: echo '${{ toJSON(github.event.client_payload.clips_data) }}' > props.json
