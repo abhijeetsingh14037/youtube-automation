@@ -43,8 +43,31 @@ jobs:
       - name: Render video
         run: npx remotion render MyComp out/video.mp4 --props=props.json
 
-      - name: Upload video as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rendered-video
-          path: out/video.mp4
+      - name: Get direct video link
+        id: videolink
+        run: |
+          LINK=$(curl -s -F"file=@out/video.mp4" https://0x0.st)
+          echo "link=$LINK" >> $GITHUB_OUTPUT
+
+      - name: Notify Activepieces
+        env:
+          VIDEO_LINK: ${{ steps.videolink.outputs.link }}
+          VIDEO_TITLE: ${{ toJSON(github.event.client_payload.title) }}
+          VIDEO_DESCRIPTION: ${{ toJSON(github.event.client_payload.description) }}
+          VIDEO_TAGS: ${{ toJSON(github.event.client_payload.tags) }}
+        run: |
+          node -e "
+          const https = require('https');
+          const data = JSON.stringify({
+            video_url: process.env.VIDEO_LINK,
+            title: JSON.parse(process.env.VIDEO_TITLE || 'null'),
+            description: JSON.parse(process.env.VIDEO_DESCRIPTION || 'null'),
+            tags: JSON.parse(process.env.VIDEO_TAGS || 'null')
+          });
+          const req = https.request('https://cloud.activepieces.com/api/v1/webhooks/ELZdlpVlxiMBZlGW9nCaX', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          req.write(data);
+          req.end();
+          "
