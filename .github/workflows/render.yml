@@ -4,6 +4,9 @@ on:
   repository_dispatch:
     types: [render-video]
 
+permissions:
+  contents: write
+
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -43,11 +46,14 @@ jobs:
       - name: Render video
         run: npx remotion render MyComp out/video.mp4 --props=props.json
 
-      - name: Get direct video link
+      - name: Publish video as release asset
         id: videolink
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LINK=$(curl -s -F"file=@out/video.mp4" https://0x0.st)
-          echo "link=$LINK" >> $GITHUB_OUTPUT
+          TAG="video-${{ github.run_id }}"
+          gh release create "$TAG" out/video.mp4 --title "$TAG" --notes "auto render" --repo "${{ github.repository }}"
+          echo "link=https://github.com/${{ github.repository }}/releases/download/$TAG/video.mp4" >> $GITHUB_OUTPUT
 
       - name: Notify Activepieces
         env:
