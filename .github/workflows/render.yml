@@ -64,9 +64,16 @@ jobs:
           VIDEO_DESCRIPTION: ${{ toJSON(github.event.client_payload.description) }}
           VIDEO_TAGS: ${{ toJSON(github.event.client_payload.tags) }}
         run: |
+          set -euo pipefail
+
           ACCESS_TOKEN=$(curl -s --request POST \
             --data "client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token" \
             https://oauth2.googleapis.com/token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
+
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "undefined" ]; then
+            echo "Access token nahi mila, token refresh fail hua"
+            exit 1
+          fi
 
           node -e "
           const fs = require('fs');
@@ -74,17 +81,42 @@ jobs:
           fs.writeFileSync('snippet.json', JSON.stringify(body));
           "
 
-          UPLOAD_URL=$(curl -s -D - -o /dev/null \
+          FILESIZE=$(stat -c%s out/video.mp4)
+
+          curl -s -D headers.txt -o /dev/null \
             -X POST "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "Content-Type: application/json" \
+            -H "Content-Type: application/json; charset=UTF-8" \
             -H "X-Upload-Content-Type: video/mp4" \
-            -d @snippet.json | grep -i "location:" | sed 's/location: //I' | tr -d '\r')
+            -H "X-Upload-Content-Length: $FILESIZE" \
+            -d @snippet.json
 
-          curl -s -X PUT "$UPLOAD_URL" \
+          echo "--- Initiation response headers ---"
+          cat headers.txt
+
+          UPLOAD_URL=$(grep -i "^location:" headers.txt | sed 's/[Ll]ocation: //I' | tr -d '\r\n')
+
+          if [ -z "$UPLOAD_URL" ]; then
+            echo "Upload URL nahi mili, upload session start hi nahi hua"
+            exit 1
+          fi
+
+          echo "Uploading to: $UPLOAD_URL"
+
+          HTTP_STATUS=$(curl -s -o upload_response.json -w "%{http_code}" -X PUT "$UPLOAD_URL" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: video/mp4" \
-            --upload-file out/video.mp4
+            --upload-file out/video.mp4)
+
+          echo "--- Upload response (status: $HTTP_STATUS) ---"
+          cat upload_response.json
+
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "Video binary upload fail hua"
+            exit 1
+          fi
+
+          echo "Video successfully uploaded"
 
       - name: Notify Activepieces
         env:
