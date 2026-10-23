@@ -78,7 +78,7 @@ jobs:
 
           node -e "
           const fs = require('fs');
-          const body = { snippet: { title: JSON.parse(process.env.VIDEO_TITLE), description: JSON.parse(process.env.VIDEO_DESCRIPTION), tags: JSON.parse(process.env.VIDEO_TAGS) }, status: { privacyStatus: 'unlisted' } };
+          const body = { snippet: { title: JSON.parse(process.env.VIDEO_TITLE), description: JSON.parse(process.env.VIDEO_DESCRIPTION), tags: JSON.parse(process.env.VIDEO_TAGS) }, status: { privacyStatus: 'unlisted', containsSyntheticMedia: true } };
           fs.writeFileSync('snippet.json', JSON.stringify(body));
           "
 
