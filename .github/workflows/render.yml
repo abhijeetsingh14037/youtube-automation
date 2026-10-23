@@ -121,6 +121,44 @@ jobs:
           echo "video_id=$VIDEO_ID" >> $GITHUB_OUTPUT
           echo "Video successfully uploaded (unlisted), ID: $VIDEO_ID"
 
+      - name: Generate and set thumbnail
+        env:
+          VIDEO_ID: ${{ steps.upload.outputs.video_id }}
+          CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_TITLE: ${{ toJSON(github.event.client_payload.title) }}
+        run: |
+          set -euo pipefail
+
+          TITLE=$(node -pe "JSON.parse(process.env.VIDEO_TITLE)")
+          PROMPT="Indian family emotional story, ${TITLE}, cinematic lighting, warm colors, heartwarming scene, high quality"
+          ENCODED_PROMPT=$(node -pe "encodeURIComponent(process.argv[1])" "$PROMPT")
+
+          curl -s -L "https://image.pollinations.ai/prompt/${ENCODED_PROMPT}?width=1280&height=720&nologo=true" -o thumbnail.jpg
+
+          echo "Thumbnail ka size:"
+          ls -la thumbnail.jpg
+
+          ACCESS_TOKEN=$(curl -s --request POST \
+            --data "client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token" \
+            https://oauth2.googleapis.com/token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
+
+          HTTP_STATUS=$(curl -s -o thumb_response.json -w "%{http_code}" \
+            -X POST "https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=$VIDEO_ID" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: image/jpeg" \
+            --upload-file thumbnail.jpg)
+
+          echo "--- Thumbnail set response (status: $HTTP_STATUS) ---"
+          cat thumb_response.json
+
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "Thumbnail set nahi ho paya, lekin video to upload ho chuki hai, isliye aage badh rahe hain"
+          else
+            echo "Thumbnail successfully set ho gaya"
+          fi
+
       - name: Wait then publish video
         env:
           CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
