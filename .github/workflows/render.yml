@@ -131,13 +131,28 @@ jobs:
         run: |
           set -euo pipefail
 
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq imagemagick fonts-noto
+
           TITLE=$(node -pe "JSON.parse(process.env.VIDEO_TITLE)")
-          PROMPT="Indian family emotional story, ${TITLE}, cinematic lighting, warm colors, heartwarming scene, high quality"
+          PROMPT="cinematic indian village scene, emotional family drama, golden hour lighting, dramatic shadows, movie poster style, highly detailed, 4k, vibrant colors"
           ENCODED_PROMPT=$(node -pe "encodeURIComponent(process.argv[1])" "$PROMPT")
+          SEED=$RANDOM
 
-          curl -s -L "https://image.pollinations.ai/prompt/${ENCODED_PROMPT}?width=1280&height=720&nologo=true" -o thumbnail.jpg
+          curl -s -L "https://image.pollinations.ai/prompt/${ENCODED_PROMPT}?width=1280&height=720&nologo=true&seed=${SEED}&model=flux" -o bg.jpg
 
-          echo "Thumbnail ka size:"
+          echo "Background image size:"
+          ls -la bg.jpg
+
+          FONT=$(fc-list | grep -i "NotoSansDevanagari-Bold" | head -n 1 | cut -d: -f1)
+          echo "Using font: $FONT"
+
+          convert bg.jpg -gravity South \
+            -fill white -font "$FONT" -pointsize 72 \
+            -size 1100x300 caption:"$TITLE" \
+            -geometry +0+40 -composite thumbnail.jpg
+
+          echo "Final thumbnail size:"
           ls -la thumbnail.jpg
 
           ACCESS_TOKEN=$(curl -s --request POST \
@@ -154,7 +169,7 @@ jobs:
           cat thumb_response.json
 
           if [ "$HTTP_STATUS" -ge 400 ]; then
-            echo "Thumbnail set nahi ho paya, lekin video to upload ho chuki hai, isliye aage badh rahe hain"
+            echo "Thumbnail set nahi ho paya, lekin video upload ho chuki hai"
           else
             echo "Thumbnail successfully set ho gaya"
           fi
