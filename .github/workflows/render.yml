@@ -128,6 +128,7 @@ jobs:
           CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           VIDEO_TITLE: ${{ toJSON(github.event.client_payload.title) }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -135,22 +136,37 @@ jobs:
           sudo apt-get install -y -qq imagemagick fonts-noto
 
           TITLE=$(node -pe "JSON.parse(process.env.VIDEO_TITLE)")
-          PROMPT="cinematic indian village scene, emotional family drama, golden hour lighting, dramatic shadows, movie poster style, highly detailed, 4k, vibrant colors"
-          ENCODED_PROMPT=$(node -pe "encodeURIComponent(process.argv[1])" "$PROMPT")
-          SEED=$RANDOM
+          PROMPT="photorealistic indian family drama scene, emotional close-up faces, mother in law and daughter in law conflict, dramatic tv serial lighting, high detail, 4k photography, cinematic"
 
-          curl -s -L "https://image.pollinations.ai/prompt/${ENCODED_PROMPT}?width=1280&height=720&nologo=true&seed=${SEED}&model=flux" -o bg.jpg
+          echo "Image generate ho rahi hai..."
+          HTTP_STATUS=$(curl -s -o bg.jpg -w "%{http_code}" \
+            -X POST "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell" \
+            -H "Authorization: Bearer $HF_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"inputs\": \"$PROMPT\"}")
 
+          echo "Image generation status: $HTTP_STATUS"
           echo "Background image size:"
           ls -la bg.jpg
+
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "Image generation fail hui, response:"
+            cat bg.jpg
+            exit 1
+          fi
 
           FONT=$(fc-list | grep -i "NotoSansDevanagari-Bold" | head -n 1 | cut -d: -f1)
           echo "Using font: $FONT"
 
+          convert bg.jpg -resize 1280x720^ -gravity center -extent 1280x720 bg.jpg
+
           convert bg.jpg -gravity South \
-            -fill white -font "$FONT" -pointsize 72 \
-            -size 1100x300 caption:"$TITLE" \
-            -geometry +0+40 -composite thumbnail.jpg
+            -font "$FONT" -pointsize 80 \
+            -fill black -stroke black -strokewidth 8 \
+            -annotate +0+45 "$TITLE" \
+            -fill yellow -stroke none \
+            -annotate +0+45 "$TITLE" \
+            thumbnail.jpg
 
           echo "Final thumbnail size:"
           ls -la thumbnail.jpg
@@ -159,16 +175,16 @@ jobs:
             --data "client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token" \
             https://oauth2.googleapis.com/token | node -pe 'JSON.parse(require("fs").readFileSync(0)).access_token')
 
-          HTTP_STATUS=$(curl -s -o thumb_response.json -w "%{http_code}" \
+          HTTP_STATUS2=$(curl -s -o thumb_response.json -w "%{http_code}" \
             -X POST "https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=$VIDEO_ID" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: image/jpeg" \
             --upload-file thumbnail.jpg)
 
-          echo "--- Thumbnail set response (status: $HTTP_STATUS) ---"
+          echo "--- Thumbnail set response (status: $HTTP_STATUS2) ---"
           cat thumb_response.json
 
-          if [ "$HTTP_STATUS" -ge 400 ]; then
+          if [ "$HTTP_STATUS2" -ge 400 ]; then
             echo "Thumbnail set nahi ho paya, lekin video upload ho chuki hai"
           else
             echo "Thumbnail successfully set ho gaya"
