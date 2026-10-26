@@ -140,7 +140,7 @@ jobs:
 
           echo "Image generate ho rahi hai..."
           HTTP_STATUS=$(curl -s -o bg.jpg -w "%{http_code}" \
-            -X POST "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell" \
+            -X POST "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell" \
             -H "Authorization: Bearer $HF_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"inputs\": \"$PROMPT\"}")

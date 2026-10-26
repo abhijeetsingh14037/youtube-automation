@@ -26,9 +26,16 @@ export const MyComponent: React.FC<Props> = ({ clips, audioUrl }) => {
           </Sequence>
         );
       })}
+
       {audioUrl ? (
         <Audio src={audioUrl.startsWith("http") ? audioUrl : staticFile(audioUrl)} />
       ) : null}
+
+      <Audio
+        src={staticFile("bgmusic.mp3")}
+        loop
+        volume={0.08}
+      />
     </AbsoluteFill>
   );
 };
