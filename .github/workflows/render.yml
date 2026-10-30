@@ -30,18 +30,84 @@ jobs:
       - name: Install edge-tts
         run: pip install edge-tts
 
-      - name: Write story text to file
-        env:
-          STORY_TEXT: ${{ github.event.client_payload.story_text }}
-        run: node -e "require('fs').writeFileSync('story.txt', process.env.STORY_TEXT)"
-
-      - name: Generate audio with edge-tts
+      - name: Write payload to file
         run: |
           mkdir -p public
-          edge-tts --voice hi-IN-MadhurNeural --rate=+15% --file story.txt --write-media public/audio.mp3
+          echo '${{ toJSON(github.event.client_payload) }}' > payload.json
 
-      - name: Write props to file
-        run: echo '${{ toJSON(github.event.client_payload.clips_data) }}' > props.json
+      - name: Build per-scene audio and clip timeline
+        run: |
+          cat > build.js << 'EOF'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
+          const scenes = payload.scenes;
+
+          const voiceMap = {
+            male: 'hi-IN-MadhurNeural',
+            female: 'hi-IN-SwaraNeural'
+          };
+
+          const allClipsPool = [];
+          scenes.forEach(s => (s.clips || []).forEach(c => allClipsPool.push(c)));
+
+          let currentTime = 0;
+          const clips = [];
+          const audioFiles = [];
+
+          scenes.forEach((scene, i) => {
+            const voice = voiceMap[scene.voice] || voiceMap.female;
+            const txtFile = `scene_${i}.txt`;
+            const mp3File = `scene_${i}.mp3`;
+
+            fs.writeFileSync(txtFile, scene.text);
+
+            console.log(`Generating audio for scene ${i} (${voice})...`);
+            execSync(`edge-tts --voice ${voice} --rate=+15% --file ${txtFile} --write-media ${mp3File}`, { stdio: 'inherit' });
+
+            const durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${mp3File}`).toString().trim();
+            const sceneDuration = parseFloat(durationStr);
+            console.log(`Scene ${i} duration: ${sceneDuration}s`);
+
+            audioFiles.push(mp3File);
+
+            let sceneClips = (scene.clips && scene.clips.length > 0) ? scene.clips : allClipsPool;
+            if (sceneClips.length === 0) sceneClips = ["https://videos.pexels.com/video-files/6961974/6961974-hd_1280_720_25fps.mp4"];
+
+            const clipLen = 4;
+            let elapsed = 0;
+            let idx = 0;
+
+            while (elapsed < sceneDuration) {
+              const remaining = sceneDuration - elapsed;
+              const length = remaining < clipLen ? remaining : clipLen;
+              const src = sceneClips[idx % sceneClips.length];
+
+              clips.push({
+                src,
+                start: currentTime + elapsed,
+                length
+              });
+
+              elapsed += length;
+              idx++;
+            }
+
+            currentTime += sceneDuration;
+          });
+
+          const listContent = audioFiles.map(f => `file '${f}'`).join('\n');
+          fs.writeFileSync('concat_list.txt', listContent);
+
+          execSync(`ffmpeg -y -f concat -safe 0 -i concat_list.txt -c:a libmp3lame -q:a 2 public/audio.mp3`, { stdio: 'inherit' });
+
+          const props = { clips, audioUrl: 'audio.mp3' };
+          fs.writeFileSync('props.json', JSON.stringify(props));
+
+          console.log('Total clips:', clips.length, 'Total duration:', currentTime);
+          EOF
+          node build.js
 
       - name: Render video
         run: npx remotion render MyComp out/video.mp4 --props=props.json
