@@ -30,6 +30,11 @@ jobs:
       - name: Install edge-tts
         run: pip install edge-tts
 
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
       - name: Write payload to file
         run: |
           mkdir -p public
