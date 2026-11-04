@@ -36,9 +36,11 @@ jobs:
           sudo apt-get install -y -qq ffmpeg
 
       - name: Write payload to file
+        env:
+          PAYLOAD_JSON: ${{ toJSON(github.event.client_payload) }}
         run: |
           mkdir -p public
-          echo '${{ toJSON(github.event.client_payload) }}' > payload.json
+          node -e "require('fs').writeFileSync('payload.json', process.env.PAYLOAD_JSON)"
 
       - name: Build per-scene audio and clip timeline
         run: |
