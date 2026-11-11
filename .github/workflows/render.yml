@@ -48,6 +48,19 @@ jobs:
           const fs = require('fs');
           const { execSync } = require('child_process');
 
+          function runWithRetry(cmd, maxRetries = 3) {
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try {
+                execSync(cmd, { stdio: 'inherit' });
+                return;
+              } catch (err) {
+                console.log(`Attempt ${attempt} failed: ${err.message}`);
+                if (attempt === maxRetries) throw err;
+                execSync('sleep 5');
+              }
+            }
+          }
+
           const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
           const scenes = payload.scenes;
 
@@ -71,7 +84,7 @@ jobs:
             fs.writeFileSync(txtFile, scene.text);
 
             console.log(`Generating audio for scene ${i} (${voice})...`);
-            execSync(`edge-tts --voice ${voice} --rate=+15% --file ${txtFile} --write-media ${mp3File}`, { stdio: 'inherit' });
+            runWithRetry(`edge-tts --voice ${voice} --rate=+15% --file ${txtFile} --write-media ${mp3File}`);
 
             const durationStr = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${mp3File}`).toString().trim();
             const sceneDuration = parseFloat(durationStr);
