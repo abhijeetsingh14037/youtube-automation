@@ -64,6 +64,11 @@ jobs:
           const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
           const scenes = payload.scenes;
 
+          if (!scenes || scenes.length === 0) {
+            console.error("ERROR: scenes array khaali hai — payload mein koi scene nahi mila. Combiner step ka output check karo.");
+            process.exit(1);
+          }
+
           const voiceMap = {
             male: 'hi-IN-MadhurNeural',
             female: 'hi-IN-SwaraNeural'
@@ -102,6 +107,9 @@ jobs:
             while (elapsed < sceneDuration) {
               const remaining = sceneDuration - elapsed;
               const length = remaining < clipLen ? remaining : clipLen;
+
+              if (length <= 0.05) break;
+
               const src = sceneClips[idx % sceneClips.length];
 
               clips.push({
